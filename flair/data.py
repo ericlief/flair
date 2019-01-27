@@ -356,69 +356,229 @@ class Sentence:
     def get_spans(self, tag_type: str, min_score=-1) -> List[Span]:
 
         spans: List[Span] = []
-
+    
         current_span = []
-
+    
         tags = defaultdict(lambda: 0.0)
-
+    
         previous_tag_value: str = 'O'
+        discontin_span = False
         for token in self:
-
+    
             tag: Label = token.get_tag(tag_type)
             tag_value = tag.value
-
+            
+            #print(token, tag)
+            
             # non-set tags are OUT tags
             if tag_value == '' or tag_value == 'O':
                 tag_value = 'O-'
-
+        
             # anything that is not a BIOES tag is a SINGLE tag
-            if tag_value[0:2] not in ['B-', 'I-', 'O-', 'E-', 'S-']:
+            if tag_value[0:2] not in ['B-', 'I-', 'O-', 'E-', 'S-', '*', '_']:
                 tag_value = 'S-' + tag_value
 
             # anything that is not OUT is IN
             in_span = False
-            if tag_value[0:2] not in ['O-']:
+            if tag_value[0:2] not in ['O-', '*', '_']:
                 in_span = True
-
+            #print("in span ", in_span)
+    
+                
+            if previous_tag_value[0:2] in ['B-', 'I-'] and tag_value in ['*', '_']:
+                discontin_span = True
+            #print("disc span", discontin_span)
+            
             # single and begin tags start a new span
+            # OK
             starts_new_span = False
-            if tag_value[0:2] in ['B-', 'S-']:
+            if tag_value[0:2] in ['B-', 'S-'] or previous_tag_value[0:2] == 'E-':
                 starts_new_span = True
-
+                #start = tag_value[2:] # ?????
+            
+            # single tag
             if previous_tag_value[0:2] in ['S-'] and previous_tag_value[2:] != tag_value[2:] and in_span:
-                starts_new_span = True
-
-            if (starts_new_span or not in_span) and len(current_span) > 0:
+                starts_new_span = True            
+            
+            #print("new span", starts_new_span)
+    
+            if not discontin_span and (starts_new_span or not in_span) and len(current_span) > 0:
+                
+                #print("calc score")
+                
                 scores = [t.get_tag(tag_type).score for t in current_span]
                 span_score = sum(scores) / len(scores)
                 if span_score > min_score:
                     spans.append(Span(
-                        current_span,
-                        tag=sorted(tags.items(), key=lambda k_v: k_v[1], reverse=True)[0][0],
-                        score=span_score)
-                    )
+                            current_span,
+                            tag=sorted(tags.items(), key=lambda k_v: k_v[1], reverse=True)[0][0],
+                            score=span_score)
+                                     )
                 current_span = []
                 tags = defaultdict(lambda: 0.0)
-
+    
             if in_span:
                 current_span.append(token)
                 weight = 1.1 if starts_new_span else 1.0
                 tags[tag_value[2:]] += weight
-
+                
+                #print("added to span")
+                
+            # for discontinuous MWEs
+            if discontin_span and tag_value[0:2] == 'E-':
+                discontin_span = False 
+            
+                #print("changed disc span to false")
+                
             # remember previous tag
             previous_tag_value = tag_value
-
+    
         if len(current_span) > 0:
             scores = [t.get_tag(tag_type).score for t in current_span]
             span_score = sum(scores) / len(scores)
             if span_score > min_score:
                 spans.append(Span(
-                    current_span,
-                    tag=sorted(tags.items(), key=lambda k_v: k_v[1], reverse=True)[0][0],
-                    score=span_score)
-                )
-
+                        current_span,
+                        tag=sorted(tags.items(), key=lambda k_v: k_v[1], reverse=True)[0][0],
+                        score=span_score)
+                             )
+    
         return spans
+        
+        #spans: List[Span] = []
+
+        #current_span = []
+
+        #tags = defaultdict(lambda: 0.0)
+
+        #previous_tag_value: str = 'O'
+        #for token in self:
+
+            #tag: Label = token.get_tag(tag_type)
+            #tag_value = tag.value
+
+            ## non-set tags are OUT tags
+            #if tag_value == '' or tag_value == 'O':
+                #tag_value = 'O-'
+
+            ## anything that is not a BIOES tag is a SINGLE tag
+            #if tag_value[0:2] not in ['B-', 'I-', 'O-', 'E-', 'S-']:
+                #tag_value = 'S-' + tag_value
+
+            ## anything that is not OUT is IN
+            #in_span = False
+            #if tag_value[0:2] not in ['O-']:
+                #in_span = True
+
+            ## single and begin tags start a new span
+            #starts_new_span = False
+            #if tag_value[0:2] in ['B-', 'S-']:
+                #starts_new_span = True
+
+            #if previous_tag_value[0:2] in ['S-'] and previous_tag_value[2:] != tag_value[2:] and in_span:
+                #starts_new_span = True
+
+            #if (starts_new_span or not in_span) and len(current_span) > 0:
+                #scores = [t.get_tag(tag_type).score for t in current_span]
+                #span_score = sum(scores) / len(scores)
+                #if span_score > min_score:
+                    #spans.append(Span(
+                        #current_span,
+                        #tag=sorted(tags.items(), key=lambda k_v: k_v[1], reverse=True)[0][0],
+                        #score=span_score)
+                    #)
+                #current_span = []
+                #tags = defaultdict(lambda: 0.0)
+
+            #if in_span:
+                #current_span.append(token)
+                #weight = 1.1 if starts_new_span else 1.0
+                #tags[tag_value[2:]] += weight
+
+            ## remember previous tag
+            #previous_tag_value = tag_value
+
+        #if len(current_span) > 0:
+            #scores = [t.get_tag(tag_type).score for t in current_span]
+            #span_score = sum(scores) / len(scores)
+            #if span_score > min_score:
+                #spans.append(Span(
+                    #current_span,
+                    #tag=sorted(tags.items(), key=lambda k_v: k_v[1], reverse=True)[0][0],
+                    #score=span_score)
+                #)
+
+        #return spans
+
+
+
+
+    #def get_spans(self, tag_type: str, min_score=-1) -> List[Span]:
+
+        #spans: List[Span] = []
+
+        #current_span = []
+
+        #tags = defaultdict(lambda: 0.0)
+
+        #previous_tag_value: str = 'O'
+        #for token in self:
+
+            #tag: Label = token.get_tag(tag_type)
+            #tag_value = tag.value
+
+            ## non-set tags are OUT tags
+            #if tag_value == '' or tag_value == 'O':
+                #tag_value = 'O-'
+
+            ## anything that is not a BIOES tag is a SINGLE tag
+            #if tag_value[0:2] not in ['B-', 'I-', 'O-', 'E-', 'S-']:
+                #tag_value = 'S-' + tag_value
+
+            ## anything that is not OUT is IN
+            #in_span = False
+            #if tag_value[0:2] not in ['O-']:
+                #in_span = True
+
+            ## single and begin tags start a new span
+            #starts_new_span = False
+            #if tag_value[0:2] in ['B-', 'S-']:
+                #starts_new_span = True
+
+            #if previous_tag_value[0:2] in ['S-'] and previous_tag_value[2:] != tag_value[2:] and in_span:
+                #starts_new_span = True
+
+            #if (starts_new_span or not in_span) and len(current_span) > 0:
+                #scores = [t.get_tag(tag_type).score for t in current_span]
+                #span_score = sum(scores) / len(scores)
+                #if span_score > min_score:
+                    #spans.append(Span(
+                        #current_span,
+                        #tag=sorted(tags.items(), key=lambda k_v: k_v[1], reverse=True)[0][0],
+                        #score=span_score)
+                    #)
+                #current_span = []
+                #tags = defaultdict(lambda: 0.0)
+
+            #if in_span:
+                #current_span.append(token)
+                #weight = 1.1 if starts_new_span else 1.0
+                #tags[tag_value[2:]] += weight
+
+            ## remember previous tag
+            #previous_tag_value = tag_value
+
+        #if len(current_span) > 0:
+            #scores = [t.get_tag(tag_type).score for t in current_span]
+            #span_score = sum(scores) / len(scores)
+            #if span_score > min_score:
+                #spans.append(Span(
+                    #current_span,
+                    #tag=sorted(tags.items(), key=lambda k_v: k_v[1], reverse=True)[0][0],
+                    #score=span_score)
+                #)
+
+        #return spans
 
     def add_label(self, label: Union[Label, str]):
         if type(label) is Label:
